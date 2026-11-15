@@ -1,0 +1,6 @@
+-r requirements.txt
+PyInstaller==6.22.0
+pip-audit==2.10.1
+pytest==9.1.1
+pytest-timeout==2.4.0
+ruff==0.16.2

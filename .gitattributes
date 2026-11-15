@@ -1,0 +1,10 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.qss text eol=lf
+*.bat text eol=crlf
+*.vbs text eol=crlf
+*.pyw text eol=lf
+*.wav binary
+*.png binary
+*.svg text eol=lf

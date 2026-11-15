@@ -1,0 +1,84 @@
+
+        QCalendarWidget#FinanceCalendar {
+            background-color: @bg_css@;
+            color: @text_css@;
+            border: 1px solid @border@;
+            border-radius: 18px;
+        }
+        QCalendarWidget#FinanceCalendar QAbstractItemView {
+            background-color: @bg_css@;
+            color: @text_css@;
+            alternate-background-color: @bg_css@;
+        }
+        QCalendarWidget#FinanceCalendar QWidget#qt_calendar_navigationbar {
+            background-color: @nav_css@;
+            color: @text_css@;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+            min-height: 42px;
+        }
+        QCalendarWidget#FinanceCalendar QToolButton {
+            background-color: rgba(10,132,255,0.12);
+            color: @text_css@;
+            border: 1px solid @border@;
+            border-radius: 10px;
+            padding: 7px 10px;
+            font-weight: 760;
+            min-height: 26px;
+        }
+        QCalendarWidget#FinanceCalendar QToolButton:hover {
+            background-color: rgba(10,132,255,0.20);
+        }
+        QCalendarWidget#FinanceCalendar QToolButton::menu-indicator { image: none; width: 0px; }
+        QCalendarWidget#FinanceCalendar QTableView,
+        QCalendarWidget#FinanceCalendar QTableView#qt_calendar_calendarview,
+        QCalendarWidget#FinanceCalendar QAbstractItemView {
+            background-color: @bg_css@;
+            alternate-background-color: @bg_css@;
+            color: @text_css@;
+            selection-background-color: @selected_css@;
+            selection-color: @text_css@;
+            gridline-color: rgba(100,116,139,0.14);
+            border: none;
+            outline: 0;
+            font-size: 13px;
+        }
+        QCalendarWidget#FinanceCalendar QTableView::item,
+        QCalendarWidget#FinanceCalendar QAbstractItemView::item {
+            background-color: @bg_css@;
+            color: @text_css@;
+            padding: 3px;
+        }
+        QCalendarWidget#FinanceCalendar QTableView::item:selected,
+        QCalendarWidget#FinanceCalendar QAbstractItemView::item:selected {
+            background-color: @selected_css@;
+            color: @text_css@;
+            border-radius: 8px;
+        }
+        QCalendarWidget#FinanceCalendar QHeaderView::section {
+            background-color: @nav_css@;
+            color: @muted_css@;
+            border: none;
+            padding: 7px;
+            font-weight: 800;
+        }
+        QCalendarWidget#FinanceCalendar QSpinBox {
+            background-color: @nav_css@;
+            color: @text_css@;
+            border: 1px solid @border@;
+            border-radius: 10px;
+            padding: 5px 32px 5px 9px;
+            min-height: 28px;
+        }
+        QCalendarWidget#FinanceCalendar QMenu {
+            background-color: @nav_css@;
+            color: @text_css@;
+            border: 1px solid @border@;
+            border-radius: 12px;
+            padding: 6px;
+        }
+        QCalendarWidget#FinanceCalendar QMenu::item:selected {
+            background-color: @selected_css@;
+            color: @text_css@;
+        }
+    

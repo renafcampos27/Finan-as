@@ -1,0 +1,80 @@
+GUIA PARA USAR NOUTRO PC — LIQUID GLASS
+=======================================
+
+OPÇÃO RECOMENDADA: INSTALAÇÃO AUTOMÁTICA SEM ADMINISTRADOR
+---------------------------------------------------------
+1. Copia o ficheiro LiquidGlass_App.zip para o outro computador.
+2. Extrai TODO o conteúdo para uma pasta normal, como Transferências\LiquidGlass.
+3. Abre LiquidGlass\INSTALAR_FINANCAS_PESSOAIS.bat com duplo clique.
+4. Usa o atalho criado no Ambiente de Trabalho ou no menu Iniciar.
+
+Não uses "Executar como administrador". A instalação é feita apenas para a tua
+conta em:
+%LOCALAPPDATA%\Programs\FinancasPessoaisLiquidGlass
+
+O instalador verifica primeiro o manifesto, o SHA-256, o tamanho e a lista
+completa dos ficheiros. A nova versão é copiada para uma pasta temporária e só
+substitui a anterior depois de passar a verificação. Não executa pip, não altera
+o PowerShell e não instala dependências globalmente.
+
+
+OPÇÃO PORTÁTIL, SEM INSTALAÇÃO
+-----------------------------
+Depois de extrair TODO o ZIP, abre:
+LiquidGlass\ABRIR_FINANCAS_PESSOAIS.bat
+
+Também podes abrir diretamente LiquidGlass\LiquidGlass.exe. Não movas apenas o
+EXE: a pasta _internal tem de permanecer junto dele.
+
+O pacote já inclui Python 3.14, PySide6/Qt, SQLite, cryptography e as bibliotecas
+de sistema necessárias. O computador de destino não precisa de Python,
+PySide6, pip ou Visual C++. O Windows PowerShell usado pelo instalador já faz
+parte do Windows 10/11 e é executado apenas durante a instalação.
+
+PyInstaller, Ruff, pytest e pip-audit servem apenas para construir e testar o
+programa. Não são necessários, copiados ou instalados no computador novo; as
+versões usadas ficam registadas no manifesto do pacote.
+
+Este pacote foi construído para Windows de 64 bits. Usa preferencialmente uma
+versão atualizada do Windows 10 ou Windows 11.
+
+Depois da primeira abertura, os dados ficam separados do programa em:
+%LOCALAPPDATA%\FinancasPessoais\dados
+Por isso, futuras substituições do programa nesse computador não apagam os
+movimentos, documentos ou backups.
+
+
+TRANSFERIR OS TEUS DADOS
+------------------------
+1. No computador antigo, abre Definições → Backups.
+2. Cria/exporta um backup completo. Podes ativar a cifragem com palavra-passe.
+3. Copia esse backup para o novo computador.
+4. No novo computador, abre Definições → Backups → Restaurar.
+
+O backup completo inclui a base, anexos, histórico e preferências. Podes usar
+“Testar recuperação” antes da transferência e configurar uma segunda cópia
+num disco externo, NAS ou pasta sincronizada.
+
+Não copies o ficheiro financas_pessoais.sqlite3 enquanto a aplicação estiver
+aberta. O pacote Windows nunca inclui os teus movimentos, anexos ou palavras-
+passe.
+
+
+ALTERNATIVA: EXECUTAR PELO CÓDIGO
+--------------------------------
+1. Instala CPython 3.14.7 de 64 bits no Windows e ativa “Add Python to PATH”.
+2. Abre a Linha de Comandos na pasta da aplicação.
+3. Executa:
+
+   py -3.14 -m pip install --upgrade pip
+   py -3.14 -m pip install -r requirements.txt
+
+4. Abre run_windows_liquid_glass.bat.
+
+
+IA ONLINE OPCIONAL
+------------------
+A gestão financeira funciona localmente. A funcionalidade Gemini só comunica
+com a Internet quando é configurada e usada explicitamente. A chave fica no
+Gestor de Credenciais do Windows e terá de ser configurada novamente no outro
+computador.

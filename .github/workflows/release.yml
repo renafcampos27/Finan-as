@@ -1,0 +1,110 @@
+name: Publish Windows release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+
+  package:
+    needs: verify
+    if: github.repository == 'renafcampos27/Finan-as'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      FINANCAS_PESSOAIS_TESTING: '1'
+      QT_QPA_PLATFORM: offscreen
+      RELEASE_TAG: ${{ github.ref_name }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+          architecture: x64
+      - name: Validate the tag against application version
+        run: |
+          $version = python -c "from utils.version import APP_VERSION; print(APP_VERSION)"
+          if ($LASTEXITCODE -ne 0 -or $env:RELEASE_TAG -cne "v$version") {
+            throw 'The release tag must exactly match APP_VERSION.'
+          }
+          "APP_RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Install isolated build dependencies
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create the virtual environment.' }
+          & .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Build dependency installation failed.' }
+      - name: Import optional Windows code signing certificate
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: |
+          if (-not $env:SIGNING_PFX_BASE64) {
+            Write-Warning 'No Authenticode certificate configured; the package will be unsigned.'
+            exit 0
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'financas-signing.pfx'
+          try {
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            $password = ConvertTo-SecureString $env:SIGNING_PFX_PASSWORD -AsPlainText -Force
+            $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+            $signer = @($certificate | Where-Object { $_.HasPrivateKey })
+            if ($signer.Count -ne 1) { throw 'Expected exactly one signing certificate with a private key.' }
+            "LIQUIDGLASS_SIGN_CERT_THUMBPRINT=$($signer[0].Thumbprint)" >> $env:GITHUB_ENV
+          } finally {
+            if (Test-Path -LiteralPath $certificatePath) { Remove-Item -LiteralPath $certificatePath -Force }
+          }
+      - name: Build and test the tagged Windows installation
+        run: |
+          $env:PATH = (Join-Path $PWD '.venv/Scripts') + ';' + $env:PATH
+          & ./scripts/build_windows.ps1 -OutputDirectory artifacts/release
+      - name: Verify package bytes and official source provenance
+        run: |
+          & .venv/Scripts/python.exe scripts/release_gate.py --strict --release-dir artifacts/release --candidate "LiquidGlass_App_v$env:APP_RELEASE_VERSION.zip" --json > artifacts/release/release_gate.json
+          if ($LASTEXITCODE -ne 0) { throw 'The official package gate failed.' }
+      - name: Publish complete release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $zip = "artifacts/release/LiquidGlass_App_v$env:APP_RELEASE_VERSION.zip"
+          $checksum = "artifacts/release/LiquidGlass_App_v$env:APP_RELEASE_VERSION.sha256.txt"
+          # A draft is invisible to the installed updater until all assets exist.
+          gh release create $env:RELEASE_TAG $zip $checksum --verify-tag --draft --title "Financas Pessoais $env:RELEASE_TAG" --notes-file RELEASE_NOTES_RESUME.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation failed; existing assets were not overwritten.' }
+          gh release edit $env:RELEASE_TAG --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release remains a draft because publication failed.' }
+      - name: Remove imported signing certificate
+        if: always()
+        run: |
+          if ($env:LIQUIDGLASS_SIGN_CERT_THUMBPRINT) {
+            $certificatePath = "Cert:\CurrentUser\My\$env:LIQUIDGLASS_SIGN_CERT_THUMBPRINT"
+            if (Test-Path -LiteralPath $certificatePath) { Remove-Item -LiteralPath $certificatePath -Force }
+          }
+      - name: Retain package verification report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: release-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/release/release_gate.json
+          if-no-files-found: ignore
+          retention-days: 30

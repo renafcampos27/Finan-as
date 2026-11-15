@@ -1,0 +1,68 @@
+# Dados financeiros e ficheiros pessoais
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.lgbak
+anexos/
+backups/
+utils/backups/
+utils/backup_preferences.json
+
+# Segredos e configuração local
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Conversas, agentes e diagnósticos locais
+sessaoopencode*/
+.agents/
+_scratch*/
+/_*.txt
+/_*.py
+/\'
+/$null
+
+# Ficheiros gerados pela aplicação
+logs/
+artifacts/
+dist/
+build/
+old/
+*.zip
+
+*.log
+output.txt
+stdout.txt
+stderr.txt
+test_ui_out.txt
+crash_log.txt
+launcher_log.txt
+screenshot*.png
+
+# Python, testes e ferramentas
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Ambientes e editores
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+*.swp
+*~
+
+# Sistema operativo
+Thumbs.db
+Desktop.ini
+.DS_Store
