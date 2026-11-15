@@ -276,7 +276,9 @@ def _exercise_full_app_state(tmp_path, monkeypatch, visual_state):
             assert dashboard.category_limit == 8
             assert dashboard.donut.minimumHeight() == round(230 * 1.20)
             assert dashboard.donut_card.minimumHeight() >= 320
-            assert movements.table_card.minimumHeight() == 480
+            # Qt can raise the requested floor to fit Windows font metrics.
+            # Accept a larger minimum selected by a clean Windows runner.
+            assert movements.table_card.minimumHeight() >= 480
             assert movements.table.minimumHeight() == 420
             assert dashboard.category_limit_combo.currentData() == 8
             assert "risco" not in window.nav_buttons

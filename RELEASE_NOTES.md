@@ -8,6 +8,22 @@ Liquid Glass.
 > reescritas. Correções da mesma série usam versões semânticas, por exemplo
 > `v3.0.1`, `v3.1.0` e `v3.2.0`.
 
+## V3.50 — v3.50.1 — publicação Windows e validação reproduzível
+
+- Distribuição Windows e atualizações assistidas pelo repositório oficial
+  `renafcampos27/Finan-as`, mantendo os dados pessoais fora do programa.
+- Verificação de versões, descarga limitada e validada por SHA256, extração
+  segura e instalação apenas depois do encerramento protegido da base de dados.
+- Instalador com preparação temporária, validação dos ficheiros e reposição da
+  instalação anterior se a substituição falhar.
+- Testes reproduzíveis em Windows limpo: caminhos longos/curtos normalizados,
+  erros de ficheiros avaliados pelo código do sistema e referência de retenção
+  independente de ficheiros privados de auditoria.
+- Geometria da lista de movimentos validada pelos limites do conteúdo e da fonte,
+  preservando o mínimo pretendido sem exigir uma altura idêntica em todos os PCs.
+- Publicação automática do pacote apenas quando os testes e o controlo da
+  distribuição passam. A assinatura Authenticode continua opcional.
+
 ## V3.50 — v3.50.0 — distribuição GitHub, atualizações assistidas e segurança
 
 Integra a propriedade da credencial LGBK2, rotação transacional, falha segura

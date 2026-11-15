@@ -2,50 +2,69 @@
 
 from __future__ import annotations
 
-import ast
 import gc
 import json
 import math
+import shutil
 import statistics
 import time
 import tracemalloc
-from pathlib import Path
 
 import pytest
 
 from database.engine import FinanceDB
 from database.repo import Repo
 from services.change_journal import ChangeJournalService
+from utils.app_logging import log_warning
+from utils.helpers import chunked_iterable
 
 
-def _before_prune():
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "artifacts/council_2026-10-31_phase5/before/services/change_journal.py"
-    ).read_text(encoding="utf-8-sig")
-    tree = ast.parse(source)
-    cls = next(
-        item
-        for item in tree.body
-        if isinstance(item, ast.ClassDef) and item.name == "ChangeJournalService"
-    )
-    method = next(
-        item
-        for item in cls.body
-        if isinstance(item, ast.FunctionDef) and item.name == "prune"
-    )
-    isolated = ast.Module(body=[method], type_ignores=[])
-    from services import change_journal
+def _legacy_materializing_prune(self: ChangeJournalService, keep: int = 100) -> None:
+    """Frozen pre-Phase-5 reference, reviewed independently of local artifacts.
 
-    namespace = dict(vars(change_journal))
-    exec(
-        compile(ast.fix_missing_locations(isolated), "<frozen-before-prune>", "exec"),
-        namespace,
-    )
-    return namespace["prune"]
+    Materializes every journal row before selecting obsolete IDs. This is the
+    former retention implementation, not an estimate of historical timings.
+    Keep its body unchanged so comparisons retain the original algorithm.
+    """
+    rows = self.repo.db.conn.execute(
+        "SELECT id, status FROM change_journal ORDER BY id DESC"
+    ).fetchall()
+    keep_limit = max(10, int(keep))
+    candidates = rows[keep_limit:]
+    obsolete = [
+        int(row["id"])
+        for row in candidates
+        if str(row["status"] or "").lower() != "available"
+    ]
+    if not obsolete:
+        return
+    owns_tx = not self.repo.db.conn.in_transaction
+    for chunk in chunked_iterable(obsolete, chunk_size=400):
+        placeholders = ",".join("?" for _ in chunk)
+        self.repo.db.conn.execute(
+            f"DELETE FROM change_journal WHERE id IN ({placeholders})",
+            tuple(chunk),
+        )
+    if owns_tx:
+        self.repo.db.conn.commit()
+        for journal_id in obsolete:
+            folder = self.journal_storage / str(journal_id)
+            if folder.exists():
+                try:
+                    shutil.rmtree(folder)
+                except OSError as exc:
+                    log_warning(
+                        "Failed to prune undo attachment folder %s: %s",
+                        folder,
+                        exc,
+                    )
 
 
-def test_retention_preserves_exact_recent_and_available_set(tmp_path, empty_profile):
+@pytest.mark.parametrize("implementation", ["legacy_reference", "current"])
+@pytest.mark.parametrize("keep", [0, 17, 100])
+def test_retention_preserves_exact_recent_and_available_set(
+    tmp_path, empty_profile, implementation, keep
+):
     repo = Repo(FinanceDB(tmp_path / "retention.sqlite3"))
     journal = ChangeJournalService(repo)
     records = [(n * 7, ["undone", "available", "failed"][n % 3]) for n in range(1, 73)]
@@ -55,19 +74,31 @@ def test_retention_preserves_exact_recent_and_available_set(tmp_path, empty_prof
             records,
         )
         repo.db.conn.commit()
-        keep = 17
-        expected = {identity for identity, _ in records[-keep:]}
+        # Independent set oracle: newest min-ten entries plus all live undos.
+        expected = {identity for identity, _ in records[-max(10, keep):]}
         expected.update(
             identity for identity, status in records if status == "available"
         )
+        folders = {}
+        for identity, _ in records:
+            folder = journal.journal_storage / str(identity)
+            folder.mkdir(parents=True)
+            (folder / "synthetic.txt").write_text("retained undo evidence", encoding="utf-8")
+            folders[identity] = folder
+        prune = journal.prune if implementation == "current" else lambda count: _legacy_materializing_prune(journal, count)
         repo.db.conn.execute("BEGIN IMMEDIATE")
-        journal.prune(keep)
+        prune(keep)
         assert repo.db.conn.in_transaction
         assert {row[0] for row in repo.q("SELECT id FROM change_journal")} == expected
+        assert all(folder.exists() for folder in folders.values())
         repo.db.conn.rollback()
         assert len(repo.q("SELECT id FROM change_journal")) == len(records)
-        journal.prune(keep)
+        prune(keep)
         assert not repo.db.conn.in_transaction
+        assert {row[0] for row in repo.q("SELECT id FROM change_journal")} == expected
+        for identity, folder in folders.items():
+            assert folder.exists() == (identity in expected)
+        prune(keep)
         assert {row[0] for row in repo.q("SELECT id FROM change_journal")} == expected
     finally:
         repo.db.conn.close()
@@ -78,7 +109,6 @@ def test_retention_reference_measurement(tmp_path, empty_profile, size):
     """No latency threshold: run serially and retain stdout for measured claims."""
     repo = Repo(FinanceDB(tmp_path / "measurement.sqlite3"))
     journal = ChangeJournalService(repo)
-    reference = _before_prune()
     try:
         repo.db.conn.executemany(
             "INSERT INTO change_journal(action_type,label,status) VALUES('edit',?,'available')",
@@ -86,7 +116,7 @@ def test_retention_reference_measurement(tmp_path, empty_profile, size):
         )
         repo.db.conn.commit()
         methods = {
-            "before": lambda: reference(journal),
+            "before": lambda: _legacy_materializing_prune(journal),
             "after": journal.prune,
         }
         samples = {name: [] for name in methods}
@@ -97,7 +127,12 @@ def test_retention_reference_measurement(tmp_path, empty_profile, size):
                 started = time.perf_counter_ns()
                 methods[name]()
                 samples[name].append((time.perf_counter_ns() - started) / 1_000_000)
-        result = {"journal_rows": size, "retained_rows": size, "methods": {}}
+        result = {
+            "journal_rows": size,
+            "retained_rows": size,
+            "reference_kind": "frozen_pre_phase5_materializing_prune",
+            "methods": {},
+        }
         for name, method in methods.items():
             gc.collect()
             tracemalloc.start()

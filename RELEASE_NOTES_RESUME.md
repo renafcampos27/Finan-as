@@ -5,6 +5,18 @@ Resumo simples das novidades de cada versão.
 > A versão mais recente é acrescentada no topo. Todas as versões anteriores
 > permanecem neste ficheiro.
 
+## V3.50 — v3.50.1 — instalar e atualizar pelo GitHub
+
+A aplicação inclui uma área de atualizações nas Definições. Na instalação
+Windows habitual, procura novas versões ao iniciar e permite descarregar,
+verificar e instalar depois da tua confirmação e de guardar os dados em segurança.
+Os dados financeiros continuam guardados localmente, separados do programa.
+
+O GitHub testa o código, gera o pacote Windows e publica o ZIP e o respetivo
+ficheiro de verificação. A distribuição só é disponibilizada quando estes
+controlos passam. A primeira instalação desta versão faz-se pelo ZIP publicado;
+as atualizações seguintes podem ser iniciadas na própria aplicação.
+
 ## V3.50 — v3.50.0 — atualizações pelo GitHub e segurança dos backups
 
 ### Em poucas palavras

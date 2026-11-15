@@ -463,7 +463,7 @@ class TestBugPERS001WalPreservation:
                     )
             assert (
                 "simulated mid-restore failure" in str(exc_info.value)
-                or "utiliz" in str(exc_info.value)  # WinError 32 share violation
+                or getattr(exc_info.value, "winerror", None) == 32
             )
 
             # The original database is back AND the WAL sidecar bytes are

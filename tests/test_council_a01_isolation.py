@@ -66,10 +66,12 @@ def test_child_process_blocks_and_records_outside_mutations(tmp_path, operation)
 def test_home_temp_and_default_paths_are_session_owned():
     from utils.config import paths_for_database
 
-    root = Path(os.environ["FINANCAS_PESSOAIS_TEST_ROOT"])
-    assert Path.home().is_relative_to(root)
+    # Windows runners may expose the same directory through an 8.3 alias.
+    # Resolve both sides so the containment check still follows real paths.
+    root = Path(os.environ["FINANCAS_PESSOAIS_TEST_ROOT"]).resolve()
+    assert Path.home().resolve().is_relative_to(root)
     for variable in ("HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP"):
-        assert Path(os.environ[variable]).is_relative_to(root)
+        assert Path(os.environ[variable]).resolve().is_relative_to(root)
     paths = paths_for_database()
     for path in (
         paths.database,
@@ -78,7 +80,7 @@ def test_home_temp_and_default_paths_are_session_owned():
         paths.configuration,
         paths.logs,
     ):
-        assert path.is_relative_to(root)
+        assert path.resolve().is_relative_to(root)
 
 
 def test_test_bootstrap_discards_inherited_environment_api_key():
