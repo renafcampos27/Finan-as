@@ -8,6 +8,17 @@ Liquid Glass.
 > reescritas. Correções da mesma série usam versões semânticas, por exemplo
 > `v3.0.1`, `v3.1.0` e `v3.2.0`.
 
+## V3.51 — v3.51.1 — encerramento dos diálogos validado
+
+- Mantém PySide6/Qt 6.12.0 e as dependências atualizadas da série V3.51.
+- O diálogo de fiscalidade é libertado após aceitar, cancelar ou falhar
+  a execução da janela, evitando acumular janelas fechadas na página.
+- Os testes eliminam os diálogos que criaram antes de terminar o sistema
+  gráfico. A comparação repetida passou de nove encerramentos nativos
+  anormais em 30 processos para zero em 30, sem omitir verificações.
+- A versão 3.51.0 ficou bloqueada na verificação de publicação; o respetivo
+  registo é preservado. Esta correção recebe uma nova versão e nova etiqueta.
+
 ## V3.51 — v3.51.0 — Qt 6.12 e dependências atualizadas
 
 - PySide6/Qt 6.12.0, cryptography 50.0.2 e NumPy 2.5.5, instalados e

@@ -114,7 +114,8 @@ def memory_secret_store():
 
 @pytest.fixture(autouse=True)
 def _cleanup_qt_state():
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication, QDialog
     from shiboken6 import isValid
 
     app = QApplication.instance()
@@ -124,14 +125,21 @@ def _cleanup_qt_state():
         app = QApplication.instance()
         if isinstance(app, QApplication):
             for widget in list(app.topLevelWidgets()):
+                if not isValid(widget) or widget in existing:
+                    continue
+                if widget.isModal() or widget.isVisible():
+                    widget.close()
                 if (
                     isValid(widget)
-                    and widget not in existing
-                    and (widget.isModal() or widget.isVisible())
+                    and isinstance(widget, QDialog)
+                    and not widget.isVisible()
                 ):
-                    widget.close()
+                    # close() hides ordinary dialogs. Destroy test-owned closed
+                    # dialogs while QApplication and their callbacks are alive,
+                    # rather than leaving cycles to interpreter finalization.
+                    widget.deleteLater()
             app.processEvents()
-            # Deferred deletion belongs to each fixture's ownership contract.
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     except Exception:
         pass
 

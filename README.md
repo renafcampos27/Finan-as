@@ -4,7 +4,7 @@ Aplicação Windows em Python/PySide6 para gerir finanças pessoais com os dados
 guardados localmente. Não existe sincronização automática com bancos,
 corretoras ou aplicações de investimento.
 
-Versão do código: **v3.51.0** — [notas técnicas](RELEASE_NOTES.md) ·
+Versão do código: **v3.51.1** — [notas técnicas](RELEASE_NOTES.md) ·
 [resumo da versão](RELEASE_NOTES_RESUME.md) ·
 [proteção dos dados entre versões](DATA_SAFETY.md)
 

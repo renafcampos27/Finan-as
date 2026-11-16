@@ -5,6 +5,15 @@ Resumo simples das novidades de cada versão.
 > A versão mais recente é acrescentada no topo. Todas as versões anteriores
 > permanecem neste ficheiro.
 
+## V3.51 — v3.51.1 — bibliotecas atuais e fecho das janelas corrigido
+
+Inclui PySide6/Qt 6.12 e as restantes bibliotecas atualizadas, mantendo a
+interface e os gráficos. Corrige a libertação do diálogo de fiscalidade ao
+fechar e a ordem de limpeza das janelas nos testes Windows.
+
+A versão 3.51.0 ficou bloqueada nos testes de publicação. A correção segue
+nesta nova versão, preservando o histórico e as verificações anteriores.
+
 ## V3.51 — v3.51.0 — bibliotecas atuais e visual preservado
 
 A aplicação passa a usar PySide6/Qt 6.12 e versões atuais das bibliotecas

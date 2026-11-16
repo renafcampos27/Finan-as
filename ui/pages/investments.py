@@ -744,7 +744,10 @@ class PortfolioPage(BasePage):
 
     def _open_tax_dialog(self) -> None:
         dialog = PortugueseTaxDialog(self.repo, self)
-        dialog.exec()
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     @staticmethod
     def _rgba(color_value: str, alpha: int) -> str:
