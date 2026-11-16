@@ -8,6 +8,17 @@ Liquid Glass.
 > reescritas. Correções da mesma série usam versões semânticas, por exemplo
 > `v3.0.1`, `v3.1.0` e `v3.2.0`.
 
+## V3.51 — v3.51.2 — isolamento dos testes de janelas
+
+- Mantém a atualização PySide6/Qt 6.12 e o fecho protegido dos diálogos.
+- Limita a eliminação adiada nos testes aos diálogos de fiscalidade que
+  estes criaram, preservando o ciclo de vida dos restantes efeitos e janelas.
+  Os 40 processos de comparação, incluindo orçamentos, terminaram sem erro.
+- Os testes de apresentação conservam diagnóstico das tarefas e da fase
+  em execução quando um processo excede o limite, incluindo a limpeza final.
+  As verificações e os limites de tempo permanecem completos.
+- A candidata 3.51.1 ficou bloqueada antes da publicação do pacote Windows.
+
 ## V3.51 — v3.51.1 — encerramento dos diálogos validado
 
 - Mantém PySide6/Qt 6.12.0 e as dependências atualizadas da série V3.51.

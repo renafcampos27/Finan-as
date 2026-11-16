@@ -115,7 +115,7 @@ def memory_secret_store():
 @pytest.fixture(autouse=True)
 def _cleanup_qt_state():
     from PySide6.QtCore import QCoreApplication, QEvent
-    from PySide6.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication
     from shiboken6 import isValid
 
     app = QApplication.instance()
@@ -124,6 +124,10 @@ def _cleanup_qt_state():
     try:
         app = QApplication.instance()
         if isinstance(app, QApplication):
+            tracing_ui = bool(os.environ.get("FINANCAS_UI_STATE_WORKER"))
+            if tracing_ui:
+                print("UI phase: fixture cleanup begin", flush=True)
+            owned_tax_dialogs = []
             for widget in list(app.topLevelWidgets()):
                 if not isValid(widget) or widget in existing:
                     continue
@@ -131,15 +135,20 @@ def _cleanup_qt_state():
                     widget.close()
                 if (
                     isValid(widget)
-                    and isinstance(widget, QDialog)
+                    and widget.objectName() == "PortugueseTaxDialog"
                     and not widget.isVisible()
                 ):
-                    # close() hides ordinary dialogs. Destroy test-owned closed
-                    # dialogs while QApplication and their callbacks are alive,
-                    # rather than leaving cycles to interpreter finalization.
+                    # Fiscal fixtures create parentless dialogs. Release those
+                    # while QApplication is alive, without flushing deferred
+                    # deletion owned by unrelated window/animation fixtures.
                     widget.deleteLater()
+                    owned_tax_dialogs.append(widget)
             app.processEvents()
-            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            for widget in owned_tax_dialogs:
+                if isValid(widget):
+                    QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
+            if tracing_ui:
+                print("UI phase: fixture cleanup finished", flush=True)
     except Exception:
         pass
 

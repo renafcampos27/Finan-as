@@ -5,6 +5,15 @@ Resumo simples das novidades de cada versão.
 > A versão mais recente é acrescentada no topo. Todas as versões anteriores
 > permanecem neste ficheiro.
 
+## V3.51 — v3.51.2 — Qt 6.12 e validação Windows
+
+Atualiza PySide6/Qt, criptografia, cálculo e ferramentas de construção,
+mantendo a interface e os gráficos. Inclui as correções do fecho de diálogos
+e da ordem de limpeza das janelas usadas nos testes Windows.
+
+As candidatas anteriores desta atualização ficaram bloqueadas antes de
+disponibilizar um instalador. Os respetivos registos permanecem no histórico.
+
 ## V3.51 — v3.51.1 — bibliotecas atuais e fecho das janelas corrigido
 
 Inclui PySide6/Qt 6.12 e as restantes bibliotecas atualizadas, mantendo a

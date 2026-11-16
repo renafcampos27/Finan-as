@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import faulthandler
 import json
 import subprocess
 import sys
@@ -62,6 +63,9 @@ def test_full_app_layout_at_requested_viewports_themes_and_privacy(
     """Each state owns a process, QApplication and temporary data profile."""
     node_id = request.node.nodeid
     if os.environ.get("FINANCAS_UI_STATE_WORKER") == node_id:
+        # This process owns one state. Keep diagnostics active through fixture
+        # teardown as well as the exercise; shutdown itself may be the blocker.
+        faulthandler.dump_traceback_later(60, repeat=True)
         _exercise_full_app_state(tmp_path, monkeypatch, visual_state)
         return
     environment = os.environ.copy()
@@ -78,26 +82,30 @@ def test_full_app_layout_at_requested_viewports_themes_and_privacy(
     # Allow sufficient headroom for rendering 30 complex pages offscreen
     deadline = 240.0
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            node_id,
-            "-q",
-            "-p",
-            "no:cacheprovider",
-            "--tb=short",
-            f"--timeout={max(1.0, deadline - 10.0)}",
-        ],
-        cwd=Path(__file__).resolve().parents[1],
-        env=environment,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=deadline,
-        check=False,
-    )
+    command = [
+        sys.executable, "-m", "pytest", node_id, "-q", "-s",
+        "-p", "no:cacheprovider", "--tb=short",
+        f"--timeout={max(1.0, deadline - 10.0)}",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=Path(__file__).resolve().parents[1],
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=deadline,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        def decoded(value):
+            return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
+        pytest.fail(
+            f"Isolated state {visual_state} timed out after {deadline}s.\n"
+            f"STDOUT:\n{decoded(exc.stdout)}\nSTDERR:\n{decoded(exc.stderr)}",
+            pytrace=False,
+        )
 
     assert result.returncode == 0, (
         f"Isolated state {visual_state} failed ({result.returncode}).\n"
@@ -124,7 +132,9 @@ def _exercise_full_app_state(tmp_path, monkeypatch, visual_state):
     original_font = QFont(qapp.font())
     window = None
     try:
+        print(f"UI phase: construct window {visual_state}", flush=True)
         window = LiquidFinanceApp()
+        print("UI phase: window constructed", flush=True)
         window.repo.set_setting("backup_on_close", "0")
         window.backup_service.run_backup_on_close = lambda silent=True: None
         window.check_subscription_reminders = lambda: None
@@ -963,12 +973,15 @@ def _exercise_full_app_state(tmp_path, monkeypatch, visual_state):
             window.resize(width, 1080 if width == 1920 else 900)
             window.repo.set_setting("liquid_dark", "1" if dark else "0")
             window.repo.set_setting("liquid_privacy", "1" if privacy else "0")
+            print("UI phase: apply theme", flush=True)
             window.apply_theme(first=True)
+            print("UI phase: theme applied", flush=True)
             assert panorama.composition.theme_provider() is window.theme
             assert panorama.sankey.theme_provider() is window.theme
             if privacy:
                 assert "••••• €" in pdf_reports.html()
-            for page in all_pages.values():
+            for page_key, page in all_pages.items():
+                print(f"UI phase: render page {page_key}", flush=True)
                 window.stack.setCurrentWidget(page)
                 qapp.processEvents()
                 assert page.reset_view_btn.geometry().right() <= page.width()
@@ -1157,6 +1170,7 @@ def _exercise_full_app_state(tmp_path, monkeypatch, visual_state):
             )
             assert window.content_scroll.horizontalScrollBar().maximum() == 0
     finally:
+        print("UI phase: close window", flush=True)
         try:
             if window is not None and isValid(window):
                 # Let the real close path stop every page worker and detach
@@ -1170,6 +1184,8 @@ def _exercise_full_app_state(tmp_path, monkeypatch, visual_state):
                 window.deleteLater()
                 QCoreApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
                 assert not isValid(window)
+                print("UI phase: window destroyed", flush=True)
         finally:
             qapp.setFont(original_font)
             assert qapp.font() == original_font
+            print("UI phase: exercise finished", flush=True)
