@@ -3,10 +3,34 @@
 from __future__ import annotations
 
 import logging
+import faulthandler
 import os
 import shutil
 import tempfile
 from pathlib import Path
+
+_process_watchdog_file = None
+_watchdog_seconds = os.environ.pop("FINANCAS_PESSOAIS_TEST_WATCHDOG_SECONDS", None)
+_watchdog_path = os.environ.pop("FINANCAS_PESSOAIS_TEST_WATCHDOG_LOG", None)
+if _watchdog_seconds:
+    # The runner bounds the entire process, including collection and native
+    # shutdown where pytest's per-test Python timer may no longer be active.
+    # This capability belongs to this process. Nested probes retain their
+    # parent's filesystem boundary and must opt in with their own owned path.
+    if _watchdog_path:
+        _process_watchdog_file = open(
+            _watchdog_path, "a", encoding="utf-8",
+        )
+    faulthandler.dump_traceback_later(
+        float(_watchdog_seconds), repeat=True,
+        file=_process_watchdog_file,
+    )
+
+
+def _native_phase(node: str, phase: str) -> None:
+    if _process_watchdog_file is not None:
+        _process_watchdog_file.write(f"{node}: {phase}\n")
+        _process_watchdog_file.flush()
 
 
 # This runs before test modules import application services. Logs, the default
@@ -62,6 +86,11 @@ WRITE_SENTINEL = activate(TEST_STATE_ROOT)
 import pytest
 
 
+@pytest.fixture
+def native_diagnostics(request):
+    return lambda phase: _native_phase(request.node.nodeid, phase)
+
+
 def pytest_addoption(parser):
     parser.addoption("--finance-profile", choices=("empty", "demo"), default=None)
 
@@ -113,14 +142,18 @@ def memory_secret_store():
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_qt_state():
+def _cleanup_qt_state(request):
     from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication
     from shiboken6 import isValid
 
+    node = request.node.nodeid
+    _native_phase(node, "fixture setup: QApplication lookup")
     app = QApplication.instance()
     existing = set(app.topLevelWidgets()) if isinstance(app, QApplication) else set()
+    _native_phase(node, "fixture setup finished")
     yield
+    _native_phase(node, "fixture cleanup begin")
     try:
         app = QApplication.instance()
         if isinstance(app, QApplication):
@@ -132,7 +165,9 @@ def _cleanup_qt_state():
                 if not isValid(widget) or widget in existing:
                     continue
                 if widget.isModal() or widget.isVisible():
+                    _native_phase(node, f"close {type(widget).__name__}")
                     widget.close()
+                    _native_phase(node, "close returned")
                 if (
                     isValid(widget)
                     and widget.objectName() == "PortugueseTaxDialog"
@@ -143,14 +178,17 @@ def _cleanup_qt_state():
                     # deletion owned by unrelated window/animation fixtures.
                     widget.deleteLater()
                     owned_tax_dialogs.append(widget)
+            _native_phase(node, "fixture processEvents begin")
             app.processEvents()
+            _native_phase(node, "fixture processEvents returned")
             for widget in owned_tax_dialogs:
                 if isValid(widget):
                     QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
             if tracing_ui:
                 print("UI phase: fixture cleanup finished", flush=True)
-    except Exception:
-        pass
+        _native_phase(node, "fixture cleanup finished")
+    except Exception as exc:
+        _native_phase(node, f"fixture cleanup exception: {type(exc).__name__}: {exc}")
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:

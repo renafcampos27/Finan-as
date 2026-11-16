@@ -9,7 +9,8 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 
-def _wait_for_movements(page, qapp: QApplication) -> None:
+def _wait_for_movements(page, qapp: QApplication, diagnose=lambda _phase: None) -> None:
+    diagnose("movements wait begin")
     for _ in range(160):
         qapp.processEvents()
         loader = getattr(page, "_loader_task", None)
@@ -19,24 +20,28 @@ def _wait_for_movements(page, qapp: QApplication) -> None:
             and not getattr(page, "_pending_load", False)
         ):
             qapp.processEvents()
+            diagnose("movements wait returned")
             return
         QTest.qWait(20)
     raise AssertionError("Movements background load did not finish")
 
 
-def _wait_for_safe_close(window, qapp: QApplication) -> None:
+def _wait_for_safe_close(window, qapp: QApplication, diagnose=lambda _phase: None) -> None:
     """Allow cooperative document cancellation to finish before DB teardown."""
 
+    diagnose("window.close begin")
     window.close()
+    diagnose("window.close returned")
     for _ in range(250):
         qapp.processEvents()
         if bool(getattr(window, "_database_closed", False)):
+            diagnose("safe close finished")
             return
         QTest.qWait(20)
     raise AssertionError("Application background tasks did not close safely")
 
 
-def test_large_lists_load_progressively_without_losing_totals(tmp_path, monkeypatch):
+def test_large_lists_load_progressively_without_losing_totals(tmp_path, monkeypatch, native_diagnostics):
     import database.repo.base as repo_base
     import services.documents as document_service_module
     import utils.app_logging as app_logging
@@ -49,10 +54,15 @@ def test_large_lists_load_progressively_without_losing_totals(tmp_path, monkeypa
     )
     monkeypatch.setattr(app_logging, "configure_logging", lambda *_a, **_k: None)
 
+    native_diagnostics("import main begin")
     from main import LiquidFinanceApp
+    native_diagnostics("import main returned")
 
+    native_diagnostics("QApplication begin")
     qapp = QApplication.instance() or QApplication([])
+    native_diagnostics("LiquidFinanceApp construct")
     window = LiquidFinanceApp()
+    native_diagnostics("LiquidFinanceApp constructed")
     window.repo.set_setting("backup_on_close", "0")
     window.backup_service.run_backup_on_close = lambda silent=True: None
     window.check_subscription_reminders = lambda: None
@@ -116,17 +126,19 @@ def test_large_lists_load_progressively_without_losing_totals(tmp_path, monkeypa
         ],
     )
     connection.commit()
+    native_diagnostics("synthetic bulk seed committed")
 
     try:
+        native_diagnostics("construct movements")
         movements = window.pages["movimentos"]
-        _wait_for_movements(movements, qapp)
+        _wait_for_movements(movements, qapp, native_diagnostics)
         assert movements.movements_model.rowCount() == 250
         assert movements._total_filtered == 620
         assert "250 de 620" in movements.table_status.text()
         assert not movements.load_more_btn.isHidden()
 
         movements.load_more_rows()
-        _wait_for_movements(movements, qapp)
+        _wait_for_movements(movements, qapp, native_diagnostics)
         assert movements.movements_model.rowCount() == 500
         assert movements._total_filtered == 620
 
@@ -136,18 +148,22 @@ def test_large_lists_load_progressively_without_losing_totals(tmp_path, monkeypa
         assert int(summary["movement_count"]) == 620
         assert float(summary["expenses"]) == 620.0
 
+        native_diagnostics("construct documents")
         documents = window.pages["documentos"]
         assert documents.table.rowCount() == 200
         assert documents._documents_total == 430
         documents.load_more_documents()
         assert documents.table.rowCount() == 400
 
+        native_diagnostics("construct AI history")
         ai_page = window.pages["ia"]
         assert ai_page.history_table.rowCount() == 100
         assert ai_page._history_total == 230
         ai_page.load_more_history()
         assert ai_page.history_table.rowCount() == 200
     finally:
+        native_diagnostics("dashboard shutdown begin")
         window.auto_backup_timer.stop()
         window.pages["dashboard"].shutdown_workers()
-        _wait_for_safe_close(window, qapp)
+        native_diagnostics("dashboard shutdown returned")
+        _wait_for_safe_close(window, qapp, native_diagnostics)

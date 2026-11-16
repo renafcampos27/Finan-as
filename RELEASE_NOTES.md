@@ -8,6 +8,19 @@ Liquid Glass.
 > reescritas. Correções da mesma série usam versões semânticas, por exemplo
 > `v3.0.1`, `v3.1.0` e `v3.2.0`.
 
+## V3.51 — v3.51.3 — diagnóstico e limites dos processos Windows
+
+- Mantém Qt 6.12 e as atualizações de dependências e fecho de diálogos da série.
+- Cada processo de testes tem um prazo completo, incluindo recolha de testes
+  e encerramento nativo. Um excesso de tempo falha a verificação, termina apenas
+  a árvore de processos que o teste criou e conserva o diagnóstico.
+- O registo das pilhas de execução fica num ficheiro próprio, independente
+  da captura do pytest. Testes reais confirmam a conservação desse registo
+  e a terminação do processo e dos seus descendentes.
+- A verificação de código 3.51.2 passou. A execução de publicação ficou parada
+  em duas suites distintas; foi interrompida, preservando os registos. As duas
+  suites passaram nas 20 repetições locais com diagnóstico adicional.
+
 ## V3.51 — v3.51.2 — isolamento dos testes de janelas
 
 - Mantém a atualização PySide6/Qt 6.12 e o fecho protegido dos diálogos.

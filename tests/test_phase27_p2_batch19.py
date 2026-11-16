@@ -197,23 +197,31 @@ def test_mov_05_sort_indicator_partial_table_status_warning(qapp, mock_app):
 # ============================================================================
 
 
-def test_inv_01_holding_dialog_zero_value_warning(qapp):
+def test_inv_01_holding_dialog_zero_value_warning(qapp, native_diagnostics):
+    native_diagnostics("HoldingDialog construct")
     dialog = HoldingDialog()
+    native_diagnostics("HoldingDialog constructed")
     dialog.name.setText("ETF Global")
     dialog.cost_known.setChecked(False)
     dialog.value.setValue(0.0)
+    native_diagnostics("synthetic inputs configured")
 
     # If user rejects the zero value confirmation, accept() returns and dialog stays open
     with patch.object(QMessageBox, "question", return_value=QMessageBox.No) as mock_q:
+        native_diagnostics("first accept begin")
         dialog.accept()
+        native_diagnostics("first accept returned")
         mock_q.assert_called_once()
         assert "Valor de Mercado Nulo" in mock_q.call_args[0][1]
 
     # If user confirms, dialog accepts
     with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
         with patch.object(QWidget, "close"):
+            native_diagnostics("second accept begin")
             dialog.accept()
+            native_diagnostics("second accept returned")
     dialog.deleteLater()
+    native_diagnostics("dialog deletion scheduled")
 
 
 def test_inv_01_close_position_dialog_gain_calculation(qapp):
