@@ -9,6 +9,7 @@ from pathlib import Path
 
 import cryptography
 import PySide6
+import pytest
 
 from utils.package_self_test import write_package_self_test_report
 from utils.version import APP_VERSION_LABEL
@@ -58,6 +59,15 @@ def test_packaged_runtime_self_test_loads_pages_and_reopens_database(
     assert report["python"] == platform.python_version()
     assert report["pyside6"] == PySide6.__version__
     assert report["cryptography"] == cryptography.__version__
+    pdf = report["functional_checks"]["pdf_preview"]
+    assert pdf["passed"] is True
+    assert pdf["document_pages"] == 1
+    assert (pdf["render_width"], pdf["render_height"]) == (240, 320)
+    assert pdf["rendered_marker_pixels"] >= 20
+    assert pdf["viewer_marker_pixels"] >= 20
+    assert pdf["viewer_shown"] is True
+    assert re.fullmatch(r"[a-f0-9]{64}", pdf["pdf_sha256"])
+    assert {"QtPdf", "QtPdfWidgets"} <= report["bundle_module_paths"].keys()
     assert json.loads(target.read_text(encoding="utf-8")) == report
     qapp.processEvents()
 
@@ -85,6 +95,20 @@ def test_build_checks_dependencies_executes_package_and_cleans_work_folders() ->
     assert "packageEntries" in build
     assert "$installedTestRoot\\LiquidGlass.exe" in build
     assert "$manifest.installation.install_test.passed = $true" in build
+
+
+def test_pdf_self_test_rejects_a_blank_render(tmp_path, monkeypatch) -> None:
+    from PySide6.QtGui import QImage
+    from PySide6.QtPdf import QPdfDocument
+    from PySide6.QtWidgets import QApplication
+    from utils.package_self_test import _pdf_preview_check
+
+    _app = QApplication.instance() or QApplication([])
+    blank = QImage(240, 320, QImage.Format.Format_ARGB32)
+    blank.fill(0xFFFFFFFF)
+    monkeypatch.setattr(QPdfDocument, "render", lambda *_args: blank)
+    with pytest.raises(RuntimeError, match="motor PDF não desenhou"):
+        _pdf_preview_check(tmp_path)
 
 
 def test_installation_docs_describe_the_complete_portable_folder() -> None:

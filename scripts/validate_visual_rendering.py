@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import json
+import math
 import os
 import shutil
 from statistics import median
@@ -46,9 +47,19 @@ def _arguments() -> argparse.Namespace:
         type=float,
         choices=(1.0, 1.25, 1.5, 2.0),
         default=1.0,
-        help="Run the real Windows render at 100, 125, 150 or 200 percent scaling.",
+        help="Render multiplier, or target DPR when --native-scale-factor is supplied.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--native-scale-factor", type=float, default=None,
+        help="Measured unmodified screen DPR; normalize the test to the target scale.",
+    )
+    arguments = parser.parse_args()
+    if arguments.native_scale_factor is not None and (
+        not math.isfinite(arguments.native_scale_factor)
+        or arguments.native_scale_factor <= 0
+    ):
+        parser.error("--native-scale-factor must be a finite positive number")
+    return arguments
 
 
 def _wait_until(app, predicate, timeout_ms: int = 10_000) -> bool:
@@ -155,20 +166,16 @@ def _seed_stress_data(window) -> list[str]:
         for index in range(30)
     ]
     connection = window.repo.db.conn
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO categories(name,kind,colour,budget)
-        VALUES(?, 'expense', ?, ?)
-        """,
-        [
-            (
-                name,
-                colours[index % len(colours)],
-                180.0 + index * 37.0,
-            )
-            for index, name in enumerate(category_names)
-        ],
-    )
+    for index, name in enumerate(category_names):
+        # Stable IDs are part of the repository's category contract. Raw inserts
+        # leave blank IDs, causing identity triggers to merge fixture labels.
+        stable_id, _display = window.repo.category_identity(
+            name, create=True, kind="expense"
+        )
+        connection.execute(
+            "UPDATE categories SET colour=?,budget=? WHERE stable_id=?",
+            (colours[index % len(colours)], 180.0 + index * 37.0, stable_id),
+        )
     current_month = date.today().replace(day=1)
     movements = []
     for month_offset in range(15):
@@ -554,7 +561,10 @@ def main() -> int:
     # text into identical square placeholders. Force the real raster platform.
     os.environ["QT_QPA_PLATFORM"] = "windows"
     os.environ.setdefault("QT_OPENGL", "software")
-    os.environ["QT_SCALE_FACTOR"] = f"{args.scale_factor:g}"
+    # Qt multiplies the platform's native DPR by QT_SCALE_FACTOR. Normalize
+    # only this disposable test process when exact DPR coverage is requested.
+    qt_scale = args.scale_factor / (args.native_scale_factor or 1.0)
+    os.environ["QT_SCALE_FACTOR"] = f"{qt_scale:g}"
     state_root = Path(tempfile.mkdtemp(prefix="financas-visual-windows-"))
     os.environ["FINANCAS_PESSOAIS_STATE_DIR"] = str(state_root)
     # This script always owns a disposable profile.  Populate it explicitly so
@@ -582,6 +592,12 @@ def main() -> int:
             raise RuntimeError(
                 f"Motor visual inesperado: {app.platformName()!r}; esperado 'windows'."
             )
+        if args.native_scale_factor is not None:
+            actual_dpr = app.primaryScreen().devicePixelRatio()
+            if not math.isclose(actual_dpr, args.scale_factor, rel_tol=0, abs_tol=0.001):
+                raise RuntimeError(
+                    f"DPR real {actual_dpr:g} difere do alvo {args.scale_factor:g}."
+                )
 
         families = QFontDatabase.families()
         if len(families) < 10:

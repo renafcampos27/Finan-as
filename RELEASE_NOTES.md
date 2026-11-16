@@ -8,6 +8,25 @@ Liquid Glass.
 > reescritas. Correções da mesma série usam versões semânticas, por exemplo
 > `v3.0.1`, `v3.1.0` e `v3.2.0`.
 
+## V3.51 — v3.51.0 — Qt 6.12 e dependências atualizadas
+
+- PySide6/Qt 6.12.0, cryptography 50.0.2 e NumPy 2.5.5, instalados e
+  verificados num ambiente Windows x64 isolado, sem pacotes globais.
+- PyInstaller 6.22.3, pytest 9.2.0 e Ruff 0.17.5. Argon2, pip-audit e
+  pytest-timeout mantêm as versões atuais verificadas. As dependências
+  transitivas foram revistas e auditadas em conjunto.
+- Pré-visualização PDF validada no executável com abertura e renderização
+  reais, incluindo os módulos PDF que passaram a ter distribuição separada.
+- Interface QWidget e gráficos QPainter preservados; testes de fontes,
+  geometrias, privacidade, gráficos densos e DPI continuam obrigatórios.
+- O diálogo de segurança aguarda a conclusão real da tarefa antes de aceitar
+  o desbloqueio e libertar os objetos gráficos associados.
+- Actions de checkout, preparação do Python e conservação de resultados
+  atualizadas para versões estáveis atuais, fixadas a commits oficiais.
+- O runtime de produção mantém CPython 3.14.10 normal. Python 3.15 foi
+  analisado: a correção Windows para DLLs abi3t de bibliotecas nativas está
+  posterior à versão publicada do empacotador; não é adotada sem essa validação.
+
 ## V3.50 — v3.50.1 — publicação Windows e validação reproduzível
 
 - Distribuição Windows e atualizações assistidas pelo repositório oficial

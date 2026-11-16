@@ -38,7 +38,11 @@ if "--package-self-test" in sys.argv:
     os.environ["FINANCAS_PESSOAIS_DEMO_DATA"] = "0"
     os.environ.pop("GEMINI_API_KEY", None)
 
-from utils.qt_runtime import configure_qt_runtime, install_global_exception_hook
+from utils.qt_runtime import (
+    configure_qt_runtime,
+    install_global_exception_hook,
+    is_qt_valid,
+)
 
 configure_qt_runtime()
 
@@ -1600,13 +1604,22 @@ class LiquidFinanceApp(QMainWindow):
             self._content_sync_timer.start()
 
     def sync_content_size(self) -> None:
+        # Deferred resize callbacks can outlive the native window/children when
+        # another nested event loop (for example PDF rendering) runs after close.
+        if getattr(self, "_closing", False) or not is_qt_valid(self):
+            return
+        stack = getattr(self, "stack", None)
+        scroll = getattr(self, "content_scroll", None)
+        if not is_qt_valid(stack) or not is_qt_valid(scroll):
+            return
         try:
-            page = self.stack.currentWidget()
-            if page is None:
+            page = stack.currentWidget()
+            viewport = scroll.viewport()
+            if not is_qt_valid(page) or not is_qt_valid(viewport):
                 return
 
-            viewport_h = self.content_scroll.viewport().height()
-            viewport_w = max(1, self.content_scroll.viewport().width())
+            viewport_h = viewport.height()
+            viewport_w = max(1, viewport.width())
 
             page.setMinimumWidth(0)
             page.setMaximumWidth(viewport_w)

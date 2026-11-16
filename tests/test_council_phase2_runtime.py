@@ -111,6 +111,7 @@ def test_package_self_test_requires_real_operations(tmp_path):
         "lgbk1_roundtrip",
         "lgbk2_roundtrip",
         "window_open_close",
+        "pdf_preview",
     }
     assert report["ok"] is True
     assert set(report["functional_checks"]) == expected

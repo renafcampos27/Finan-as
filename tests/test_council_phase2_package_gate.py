@@ -57,10 +57,16 @@ def _report(root: Path) -> dict:
                 "shown": True,
                 "database_closed": True,
             },
+            "pdf_preview": {
+                "passed": True, "document_pages": 1,
+                "render_width": 240, "render_height": 320,
+                "rendered_marker_pixels": 100, "viewer_marker_pixels": 100,
+                "viewer_shown": True, "pdf_sha256": "b" * 64,
+            },
         },
         "bundle_root": str(bundle),
         "bundle_module_paths": {
-            name: str(bundle / name / "__init__.pyc") for name in ("numpy", "argon2")
+            name: str(bundle / name / "__init__.pyc") for name in ("numpy", "argon2", "QtPdf", "QtPdfWidgets")
         },
     }
 
@@ -76,7 +82,10 @@ def _package(root: Path) -> tuple[Path, dict[str, bytes]]:
     source = root / "source"
     source.mkdir()
     for name in ("main.py", "requirements.txt", "LiquidGlass.spec"):
-        (source / name).write_text("synthetic build input", encoding="utf-8")
+        (source / name).write_text(
+            "numpy==2.5.2\n" if name == "requirements.txt" else "synthetic build input",
+            encoding="utf-8",
+        )
     source_entries = [
         {"path": p.name, "size": p.stat().st_size, "sha256": sha256_file(p)}
         for p in sorted(source.iterdir())
@@ -195,6 +204,10 @@ def test_passed_boolean_without_byte_source_operation_evidence_is_rejected(tmp_p
         "nonfinite_result",
         "kdf_fallback",
         "invalid_recovery_accepted",
+        "blank_pdf",
+        "unshown_pdf",
+        "external_pdf_module",
+        "numpy_version",
     ],
 )
 def test_manifest_flags_do_not_override_invalid_actual_contents(tmp_path, mutation):
@@ -230,6 +243,14 @@ def test_manifest_flags_do_not_override_invalid_actual_contents(tmp_path, mutati
             evidence["functional_checks"]["lgbk2_roundtrip"][
                 "wrong_password_rejected"
             ] = False
+        elif mutation == "blank_pdf":
+            evidence["functional_checks"]["pdf_preview"]["rendered_marker_pixels"] = 0
+        elif mutation == "unshown_pdf":
+            evidence["functional_checks"]["pdf_preview"]["viewer_shown"] = False
+        elif mutation == "external_pdf_module":
+            evidence["bundle_module_paths"]["QtPdf"] = str(tmp_path / "foreign/QtPdf.pyd")
+        elif mutation == "numpy_version":
+            evidence["numpy"] = "0.0.0"
         else:
             evidence["application_version"] = "99.0.0"
         files[evidence_name] = json.dumps(evidence).encode()
@@ -245,6 +266,24 @@ def test_manifest_flags_do_not_override_invalid_actual_contents(tmp_path, mutati
         _update_manifest(files, refresh)
     _write_package(package, files)
     assert verify_candidate_package(package)["ok"] is False
+
+
+@pytest.mark.parametrize("application_version,requires_pdf", [("3.50.1", False), ("3.51.0", True)])
+def test_pdf_proof_is_required_from_351_without_invalidating_published_3501(
+    tmp_path, application_version, requires_pdf
+):
+    from scripts.package_integrity import validate_functional_report
+
+    report = _report(tmp_path)
+    report["application_version"] = application_version
+    del report["functional_checks"]["pdf_preview"]
+    del report["bundle_module_paths"]["QtPdf"]
+    del report["bundle_module_paths"]["QtPdfWidgets"]
+    if requires_pdf:
+        with pytest.raises(ValueError, match="functional operation"):
+            validate_functional_report(report, expected_numpy="2.5.2")
+    else:
+        validate_functional_report(report, expected_numpy="2.5.2")
 
 
 @pytest.mark.parametrize("state", ["modified", "unavailable"])

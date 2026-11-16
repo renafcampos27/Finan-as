@@ -79,7 +79,7 @@ def _create_synthetic_project(
     (root / "RELEASE_NOTES_RESUME.md").write_text("".join(notes_lines), encoding="utf-8")
     (root / "release").mkdir(parents=True, exist_ok=True)
     for name in ("main.py", "requirements.txt", "LiquidGlass.spec"):
-        (root / name).write_text("synthetic build input", encoding="utf-8")
+        (root / name).write_text("numpy==2.5.2\n" if name == "requirements.txt" else "synthetic build input", encoding="utf-8")
     (root / ".gitignore").write_text("release/\n", encoding="utf-8")
     for arguments in (
         ("init", "--quiet"),
@@ -111,7 +111,7 @@ def _create_synthetic_package(
             ["git", "rev-parse", "HEAD"], cwd=root, text=True, timeout=15
         ).strip()
     for name in ("main.py", "requirements.txt", "LiquidGlass.spec"):
-        (root / name).write_text("synthetic build input", encoding="utf-8")
+        (root / name).write_text("numpy==2.5.2\n" if name == "requirements.txt" else "synthetic build input", encoding="utf-8")
     source_entries = [
         {"path": name, "size": (root / name).stat().st_size, "sha256": sha256_file(root / name)}
         for name in ("main.py", "requirements.txt", "LiquidGlass.spec", "utils/version.py")
@@ -125,9 +125,10 @@ def _create_synthetic_package(
             "numpy_health": {"passed": True, "score": 50, "rows": 4, "simulations": 200},
             **{name: {"passed": True, "format": format_name, "restored_marker": "synthetic-acceptance", "restored_transactions": 12, "wrong_password_rejected": True, "truncated_rejected": True, "restored_attachment_sha256": "a" * 64, **({"kdf_algorithm": "argon2id"} if format_name == "LGBK2" else {})} for name, format_name in (("lgbk1_roundtrip", "LGBK1"), ("lgbk2_roundtrip", "LGBK2"))},
             "window_open_close": {"passed": True, "shown": True, "database_closed": True},
+            "pdf_preview": {"passed": True, "document_pages": 1, "render_width": 240, "render_height": 320, "rendered_marker_pixels": 100, "viewer_marker_pixels": 100, "viewer_shown": True, "pdf_sha256": "b" * 64},
         },
         "bundle_root": str(bundle_root),
-        "bundle_module_paths": {name: str(bundle_root / name / "__init__.pyc") for name in ("numpy", "argon2")},
+        "bundle_module_paths": {name: str(bundle_root / name / "__init__.pyc") for name in ("numpy", "argon2", "QtPdf", "QtPdfWidgets")},
     }
     contents = {"app/dummy.exe": b"dummy binary content", "evidence/self_test.json": json.dumps(evidence).encode()}
     entries = [{"path": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in contents.items()]

@@ -1591,7 +1591,11 @@ class DocumentsPage(BasePage):
         else:
             path = Path(verified["path"])
             if bool(verified.get("internal_preview")):
-                AttachmentPreviewDialog(path, self).exec()
+                preview = AttachmentPreviewDialog(path, self)
+                try:
+                    preview.exec()
+                finally:
+                    preview.deleteLater()
                 self.refresh(reset_limit=False)
                 return
             if bool(verified.get("active_warning")):

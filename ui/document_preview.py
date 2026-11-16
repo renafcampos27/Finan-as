@@ -201,5 +201,23 @@ class AttachmentPreviewDialog(QDialog):
             max(0.2, min(5.0, self._pdf_view.zoomFactor() * factor))
         )
 
+    def _release_pdf(self) -> None:
+        # Detach the view before closing its document so pending native page
+        # renders cannot outlive the document during dialog destruction.
+        if self._pdf_view is not None:
+            self._pdf_view.setDocument(None)
+        if self._pdf_document is not None:
+            self._pdf_document.close()
+        self._pdf_view = None
+        self._pdf_document = None
+
+    def done(self, result: int) -> None:
+        self._release_pdf()
+        super().done(result)
+
+    def closeEvent(self, event) -> None:
+        self._release_pdf()
+        super().closeEvent(event)
+
 
 __all__ = ["AttachmentPreviewDialog"]

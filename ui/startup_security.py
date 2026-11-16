@@ -67,6 +67,7 @@ class StartupSecurityDialog(QDialog):
         self.session_context = None
         self._busy = False
         self._worker_finalized = False
+        self._worker_outcome = None
         self._worker_task = None
         self._throttle_until_ms = 0
         self._countdown_timer = QTimer(self)
@@ -585,6 +586,7 @@ class StartupSecurityDialog(QDialog):
         """Non-blocking worker: typed slots without nested event loops."""
 
         self._worker_finalized = False
+        self._worker_outcome = None
         # BUG-AUD-C142: register against the window registry when the parent
         # is the main window so closeEvent cancels and waits for this thread.
         task = AsyncTask(
@@ -595,6 +597,7 @@ class StartupSecurityDialog(QDialog):
         self._worker_task = task
         task.result.connect(self._on_worker_result)
         task.error.connect(self._on_worker_error_str)
+        task.finished.connect(self._on_worker_finished)
         if not task.start(work):
             self._worker_task = None
             self._set_busy(False)
@@ -603,7 +606,24 @@ class StartupSecurityDialog(QDialog):
     def _on_worker_result(self, outcome: object) -> None:
         if self._worker_finalized:
             return  # late result after the dialog was closed: ignore
+        self._worker_outcome = outcome
+
+    def _on_worker_finished(self, cancelled: bool) -> None:
+        # A result can arrive before its native QThread has returned. Accepting
+        # the dialog then lets the gate delete the task's QObject owner early.
+        # AsyncTask.finished guarantees the thread was joined and deregistered.
         self._worker_task = None
+        outcome, self._worker_outcome = self._worker_outcome, None
+        if self._worker_finalized:
+            return
+        if cancelled or outcome is None:
+            close_outcome = getattr(outcome, "close", None)
+            if callable(close_outcome):
+                close_outcome()
+            self._set_busy(False)
+            self._set_status("A verificação foi cancelada. Tenta novamente.", error=True)
+            self.operation_finished.emit(False)
+            return
         if isinstance(outcome, BaseException):
             self._set_busy(False)
             self._handle_worker_error(outcome)
@@ -616,9 +636,7 @@ class StartupSecurityDialog(QDialog):
     def _on_worker_error_str(self, message: str) -> None:
         if self._worker_finalized:
             return
-        self._worker_task = None
-        self._set_busy(False)
-        self._handle_worker_error(RuntimeError(message))
+        self._worker_outcome = RuntimeError(message)
 
     def _handle_worker_error(self, exc: BaseException) -> None:
         from services.startup_security import (

@@ -23,6 +23,7 @@ FUNCTIONAL_CHECKS = (
     "lgbk1_roundtrip",
     "lgbk2_roundtrip",
     "window_open_close",
+    "pdf_preview",
 )
 
 
@@ -55,7 +56,9 @@ def safe_relative(value: str) -> str:
     return value
 
 
-def validate_functional_report(report: dict[str, Any]) -> None:
+def validate_functional_report(
+    report: dict[str, Any], *, expected_numpy: str | None = None
+) -> None:
     if not isinstance(report, dict):
         raise ValueError("Functional evidence must be a JSON object")
     if report.get("ok") is not True or report.get("frozen") is not True:
@@ -65,10 +68,20 @@ def validate_functional_report(report: dict[str, Any]) -> None:
         or int(report.get("page_exports_loaded", 0)) < 25
     ):
         raise ValueError("Incomplete database/page evidence")
+    application_version = report.get("application_version")
+    if not isinstance(application_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", application_version):
+        raise ValueError("Missing valid application version in functional evidence")
+    # PDF runtime acceptance was introduced with 3.51. Retain the established
+    # evidence contract for older published releases, while validating any
+    # PDF evidence that they explicitly provide.
+    requires_pdf = tuple(map(int, application_version.split("."))) >= (3, 51, 0)
     checks = report.get("functional_checks", {})
+    required_checks = tuple(
+        name for name in FUNCTIONAL_CHECKS if name != "pdf_preview" or requires_pdf
+    )
     if not isinstance(checks, dict) or any(
         not isinstance(checks.get(name), dict) or checks[name].get("passed") is not True
-        for name in FUNCTIONAL_CHECKS
+        for name in required_checks
     ):
         raise ValueError("Missing successful functional operation evidence")
     for name, statistic in (("numpy_simulation", "median"), ("numpy_health", "score")):
@@ -117,13 +130,31 @@ def validate_functional_report(report: dict[str, Any]) -> None:
         or checks["window_open_close"].get("database_closed") is not True
     ):
         raise ValueError("Incomplete window lifecycle evidence")
-    if report.get("numpy") != "2.5.2":
+    numpy_version = report.get("numpy")
+    if not isinstance(numpy_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[a-zA-Z0-9.+-]*)", numpy_version):
         raise ValueError("Unexpected NumPy runtime")
+    if expected_numpy is not None and numpy_version != expected_numpy:
+        raise ValueError("NumPy runtime differs from the verified source pin")
+    pdf = checks.get("pdf_preview")
+    if pdf is not None and (
+        not isinstance(pdf, dict) or pdf.get("passed") is not True
+        or
+        type(pdf.get("document_pages")) is not int or pdf["document_pages"] != 1
+        or type(pdf.get("render_width")) is not int or pdf["render_width"] != 240
+        or type(pdf.get("render_height")) is not int or pdf["render_height"] != 320
+        or type(pdf.get("rendered_marker_pixels")) is not int or pdf["rendered_marker_pixels"] < 20
+        or type(pdf.get("viewer_marker_pixels")) is not int or pdf["viewer_marker_pixels"] < 20
+        or pdf.get("viewer_shown") is not True
+        or not isinstance(pdf.get("pdf_sha256"), str)
+        or not re.fullmatch(r"[a-fA-F0-9]{64}", pdf["pdf_sha256"])
+    ):
+        raise ValueError("Incomplete PDF opening/rendering/viewer evidence")
     bundle_root = Path(report.get("bundle_root", ""))
     paths = report.get("bundle_module_paths", {})
     if not bundle_root.is_absolute() or not isinstance(paths, dict):
         raise ValueError("Missing frozen module provenance")
-    for name in ("numpy", "argon2"):
+    required_modules = ("numpy", "argon2") + (("QtPdf", "QtPdfWidgets") if requires_pdf or pdf is not None else ())
+    for name in required_modules:
         path = Path(paths.get(name, ""))
         if not path.is_absolute() or not path.is_relative_to(bundle_root):
             raise ValueError(f"{name} was not loaded from the packaged runtime")
@@ -330,6 +361,14 @@ def verify_package(
                     raise ValueError(f"Source fingerprint mismatch: {relative}")
             if not {"main.py", "requirements.txt", "liquidglass.spec"}.issubset(seen):
                 raise ValueError("Source inventory omits required build inputs")
+            numpy_pin = re.search(
+                r"^numpy==([0-9][0-9A-Za-z.+-]*)$",
+                (directory / "requirements.txt").read_text(encoding="utf-8"),
+                flags=re.MULTILINE,
+            )
+            if numpy_pin is None:
+                raise ValueError("Verified source does not pin the NumPy runtime")
+            expected_numpy = numpy_pin.group(1)
             report["source_ok"] = True
 
             if manifest.get("self_test", {}).get("passed") is not True:
@@ -342,7 +381,7 @@ def verify_package(
                     "Functional evidence is absent from the byte inventory"
                 )
             evidence = json.loads(archive.read(evidence_name))
-            validate_functional_report(evidence)
+            validate_functional_report(evidence, expected_numpy=expected_numpy)
             if evidence.get("application_version") != manifest.get("version"):
                 raise ValueError(
                     "Functional evidence version differs from the packaged application"
@@ -361,6 +400,7 @@ def verify_package(
                     report["runtime_report"] = run_packaged_probe(
                         destination / executable, timeout=runtime_timeout
                     )
+                    validate_functional_report(report["runtime_report"], expected_numpy=expected_numpy)
                     report["runtime_executed"] = True
         report["ok"] = True
     except (

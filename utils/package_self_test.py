@@ -207,6 +207,84 @@ def _window_check(root: Path) -> dict[str, Any]:
             QCoreApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
 
 
+def _pdf_preview_check(root: Path) -> dict[str, Any]:
+    """Open and paint a generated PDF through both the PDF engine and viewer."""
+    from PySide6.QtCore import QCoreApplication, QEvent, QSize
+    from PySide6.QtGui import QColor, QPageSize, QPainter, QPdfWriter
+    from PySide6.QtPdf import QPdfDocument
+    from PySide6.QtPdfWidgets import QPdfView
+    from PySide6.QtWidgets import QApplication
+
+    qapp = QApplication.instance() or QApplication([])
+    pdf = root / "synthetic-preview.pdf"
+    writer = QPdfWriter(str(pdf))
+    writer.setResolution(72)
+    writer.setPageSize(QPageSize(QPageSize.PageSizeId.A6))
+    painter = QPainter(writer)
+    if not painter.isActive():
+        raise RuntimeError("Não foi possível criar o PDF sintético do auto-teste.")
+    try:
+        painter.fillRect(20, 20, 80, 60, QColor("#d12a3a"))
+        painter.drawText(20, 110, "Synthetic PDF package acceptance")
+    finally:
+        painter.end()
+    del writer  # Finalize the PDF cross-reference/trailer before opening it.
+
+    def marker_pixels(image) -> int:
+        return sum(
+            1
+            for y in range(0, image.height(), 4)
+            for x in range(0, image.width(), 4)
+            if (color := image.pixelColor(x, y)).red() > 150
+            and color.green() < 100 and color.blue() < 120
+        )
+
+    document = QPdfDocument(qapp)
+    view = QPdfView()
+    try:
+        error = document.load(str(pdf))
+        if error != QPdfDocument.Error.None_ or document.pageCount() != 1:
+            raise RuntimeError("O motor PDF não abriu a página sintética.")
+        image = document.render(0, QSize(240, 320))
+        rendered_marker_pixels = marker_pixels(image)
+        if image.isNull() or rendered_marker_pixels < 20:
+            raise RuntimeError("O motor PDF não desenhou o conteúdo sintético.")
+
+        view.resize(320, 440)
+        view.setDocument(document)
+        view.setPageMode(QPdfView.PageMode.MultiPage)
+        view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+        view.show()
+        deadline = time.monotonic() + 5
+        viewer_marker_pixels = 0
+        while time.monotonic() < deadline:
+            qapp.processEvents()
+            viewer_marker_pixels = marker_pixels(view.grab().toImage())
+            if viewer_marker_pixels >= 20:
+                break
+            time.sleep(0.01)
+        if not view.isVisible() or viewer_marker_pixels < 20:
+            raise RuntimeError("O visualizador PDF não apresentou o conteúdo sintético.")
+        return {
+            "passed": True,
+            "document_pages": document.pageCount(),
+            "render_width": image.width(),
+            "render_height": image.height(),
+            "rendered_marker_pixels": rendered_marker_pixels,
+            "viewer_marker_pixels": viewer_marker_pixels,
+            "viewer_shown": view.isVisible(),
+            "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+        }
+    finally:
+        view.setDocument(None)
+        view.close()
+        view.deleteLater()
+        QCoreApplication.sendPostedEvents(view, QEvent.Type.DeferredDelete)
+        document.close()
+        document.deleteLater()
+        QCoreApplication.sendPostedEvents(document, QEvent.Type.DeferredDelete)
+
+
 def create_package_self_test_report() -> dict[str, Any]:
     """Exercise the delivered runtime, UI and both encrypted recovery formats."""
 
@@ -318,6 +396,7 @@ def create_package_self_test_report() -> dict[str, Any]:
                 )
             finally:
                 reopened.close()
+            functional["pdf_preview"] = _pdf_preview_check(root)
             functional["window_open_close"] = _window_check(root)
 
     return {
@@ -337,6 +416,8 @@ def create_package_self_test_report() -> dict[str, Any]:
         "bundle_module_paths": {
             "numpy": str(Path(numpy.__file__).resolve()),
             "argon2": str(Path(argon2.__file__).resolve()),
+            "QtPdf": str(Path(sys.modules["PySide6.QtPdf"].__file__).resolve()),
+            "QtPdfWidgets": str(Path(sys.modules["PySide6.QtPdfWidgets"].__file__).resolve()),
         },
         "functional_checks": functional,
         "frozen": bool(getattr(sys, "frozen", False)),

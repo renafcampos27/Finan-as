@@ -292,6 +292,9 @@ def build_candidate(project: Path, output: Path) -> dict[str, Any]:
     )
     bundle = output / "LiquidGlass"
     shutil.copytree(snapshot / "dist/LiquidGlass", bundle)
+    for name in ("QtPdf.pyd", "QtPdfWidgets.pyd", "Qt6Pdf.dll", "Qt6PdfWidgets.dll"):
+        if not (bundle / "_internal/PySide6" / name).is_file():
+            raise ValueError(f"Candidate omits required PDF runtime: {name}")
     print("Executing real frozen operations from the retained bundle", flush=True)
     evidence = run_packaged_probe(bundle / "LiquidGlass.exe")
     evidence_dir = bundle / "evidence"

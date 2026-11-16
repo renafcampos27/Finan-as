@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from datetime import date
 from pathlib import Path
 
@@ -30,6 +31,13 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     instance = Repo()
     yield instance
     instance.db.conn.close()
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
 
 
 def _valid_pdf(label: str = "documento") -> bytes:
@@ -358,21 +366,23 @@ def test_security_dependency_is_pinned_to_fixed_release() -> None:
     requirements = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text(
         encoding="utf-8"
     )
-    # v3.50: cryptography 50.0.1 reconciles requirements with the canonical
-    # documentation (which already claimed the 50.x series) and keeps the
-    # AES-256-GCM/Argon2id behaviour verified by the security battery.
-    assert "cryptography==50.0.1" in requirements
-    assert "argon2-cffi==25.1.0" in requirements
+    # Exact pins must retain the validated release floors while permitting
+    # later patched releases; installed-version consistency is checked separately.
+    for package, floor in (("cryptography", (50, 0, 1)), ("argon2-cffi", (25, 1, 0))):
+        match = re.search(rf"^{re.escape(package)}==(\d+)\.(\d+)\.(\d+)$", requirements, re.MULTILINE)
+        assert match is not None, f"Missing exact stable pin for {package}"
+        assert tuple(map(int, match.groups())) >= floor
 
 
-def test_internal_image_and_pdf_previews_render_offscreen(tmp_path: Path) -> None:
-    from PySide6.QtCore import QRect
+@pytest.mark.parametrize("close_method", ["close", "reject"])
+def test_internal_image_and_pdf_previews_render_offscreen(tmp_path: Path, qapp, close_method) -> None:
+    from PySide6.QtCore import QCoreApplication, QEvent, QRect
     from PySide6.QtGui import QColor, QImage, QPainter, QPdfWriter
-    from PySide6.QtWidgets import QApplication
+    from shiboken6 import isValid
 
     from ui.document_preview import AttachmentPreviewDialog
 
-    app = QApplication.instance() or QApplication([])
+    app = qapp
     image_path = tmp_path / "comprovativo.png"
     image = QImage(320, 180, QImage.Format_ARGB32)
     image.fill(QColor("#DCEBFF"))
@@ -383,13 +393,29 @@ def test_internal_image_and_pdf_previews_render_offscreen(tmp_path: Path) -> Non
     painter = QPainter(writer)
     painter.drawText(QRect(100, 100, 800, 200), "Fatura verificada")
     painter.end()
+    del painter
+    del writer  # Finalize the PDF cross-reference before opening it for preview.
 
     image_dialog = AttachmentPreviewDialog(image_path)
     pdf_dialog = AttachmentPreviewDialog(pdf_path)
-    for dialog in (image_dialog, pdf_dialog):
-        dialog.show()
+    document = pdf_dialog._pdf_document
+    view = pdf_dialog._pdf_view
+    assert document is not None and document.pageCount() == 1
+    assert view is not None and view.document() is document
+    try:
+        for dialog in (image_dialog, pdf_dialog):
+            dialog.show()
+            app.processEvents()
+            assert not dialog.grab().isNull()
+            assert dialog.width() >= 620
+            assert dialog.height() >= 480
+            getattr(dialog, close_method)()
+        assert view.document() is None
+        assert document.pageCount() == 0
+    finally:
+        for dialog in (image_dialog, pdf_dialog):
+            if isValid(dialog):
+                dialog.close()
+                dialog.deleteLater()
+                QCoreApplication.sendPostedEvents(dialog, QEvent.Type.DeferredDelete)
         app.processEvents()
-        assert not dialog.grab().isNull()
-        assert dialog.width() >= 620
-        assert dialog.height() >= 480
-        dialog.close()

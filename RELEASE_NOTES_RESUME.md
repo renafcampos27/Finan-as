@@ -5,6 +5,17 @@ Resumo simples das novidades de cada versão.
 > A versão mais recente é acrescentada no topo. Todas as versões anteriores
 > permanecem neste ficheiro.
 
+## V3.51 — v3.51.0 — bibliotecas atuais e visual preservado
+
+A aplicação passa a usar PySide6/Qt 6.12 e versões atuais das bibliotecas
+criptográficas, de cálculo e de construção do instalador. Mantém a interface e
+os gráficos existentes. A pré-visualização PDF passa a ter um autoteste real
+no executável distribuído, além dos testes de apresentação e privacidade.
+
+A atualização mantém o Python 3.14.10 já validado. O suporte inicial a Python
+3.15 foi analisado separadamente para evitar adotar um problema conhecido do
+empacotamento Windows antes de existir uma correção publicada e validada.
+
 ## V3.50 — v3.50.1 — instalar e atualizar pelo GitHub
 
 A aplicação inclui uma área de atualizações nas Definições. Na instalação

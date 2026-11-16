@@ -81,6 +81,8 @@ packages = {
         "PySide6",
         "PySide6_Addons",
         "PySide6_Essentials",
+        "PySide6_Pdf",
+        "PySide6_WebEngine",
         "shiboken6",
         "cryptography",
         "argon2-cffi",
@@ -317,6 +319,10 @@ $requiredBundleFiles = @(
     "_internal\PySide6\Qt6Widgets.dll",
     "_internal\PySide6\Qt6Network.dll",
     "_internal\PySide6\Qt6Multimedia.dll",
+    "_internal\PySide6\QtPdf.pyd",
+    "_internal\PySide6\QtPdfWidgets.pyd",
+    "_internal\PySide6\Qt6Pdf.dll",
+    "_internal\PySide6\Qt6PdfWidgets.dll",
     "_internal\PySide6\plugins\platforms\qwindows.dll",
     "_internal\cryptography\hazmat\bindings\_rust.pyd",
     "_internal\_argon2_cffi_bindings\_ffi.pyd",
@@ -336,10 +342,19 @@ function Assert-FunctionalSelfTest {
     if ($Data.ok -ne $true -or $Data.frozen -ne $true -or [string]$Data.numpy -ne $expectedNumPy) {
         throw "O auto-teste nao confirmou o runtime congelado e NumPy esperado."
     }
-    foreach ($operation in @("numpy_simulation", "numpy_health", "lgbk1_roundtrip", "lgbk2_roundtrip", "window_open_close")) {
+    foreach ($operation in @("numpy_simulation", "numpy_health", "lgbk1_roundtrip", "lgbk2_roundtrip", "window_open_close", "pdf_preview")) {
         if ($Data.functional_checks.$operation.passed -ne $true) {
             throw "O auto-teste nao executou a operacao obrigatoria: $operation"
         }
+    }
+    $pdf = $Data.functional_checks.pdf_preview
+    if (
+        [int]$pdf.document_pages -ne 1 -or
+        [int]$pdf.rendered_marker_pixels -lt 20 -or
+        [int]$pdf.viewer_marker_pixels -lt 20 -or
+        $pdf.viewer_shown -ne $true
+    ) {
+        throw "O auto-teste nao confirmou a abertura e apresentacao do PDF sintetico."
     }
 }
 
@@ -495,6 +510,8 @@ $manifest = [ordered]@{
         pyside6 = [string]$runtimeInfo.packages.PySide6
         pyside6_addons = [string]$runtimeInfo.packages.PySide6_Addons
         pyside6_essentials = [string]$runtimeInfo.packages.PySide6_Essentials
+        pyside6_pdf = [string]$runtimeInfo.packages.PySide6_Pdf
+        pyside6_webengine = [string]$runtimeInfo.packages.PySide6_WebEngine
         shiboken6 = [string]$runtimeInfo.packages.shiboken6
         qt = [string]$runtimeInfo.qt
         cryptography = [string]$runtimeInfo.packages.cryptography

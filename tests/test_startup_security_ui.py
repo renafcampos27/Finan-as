@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer, Qt
 from PySide6.QtWidgets import QApplication, QLineEdit
 
 
@@ -39,17 +39,31 @@ from ui.startup_security import StartupSecurityDialog, run_startup_security_gate
 
 
 @pytest.fixture(autouse=True)
-def _no_leaked_session():
+def _no_leaked_session(qapp):
     """Never leak the module-level active session into other tests."""
 
     from services.startup_security import clear_active_session
 
     clear_active_session()
     yield
+    from ui.workers import _STANDALONE_TASK_REGISTRY
+    from shiboken6 import isValid
+
+    assert _process_until(qapp, lambda: not _STANDALONE_TASK_REGISTRY.has_active_tasks())
+    for widget in qapp.topLevelWidgets():
+        if isValid(widget) and isinstance(widget, StartupSecurityDialog):
+            context = getattr(widget, "session_context", None)
+            close_context = getattr(context, "close", None)
+            if callable(close_context):
+                close_context()
+            widget.close()
+            widget.deleteLater()
+            QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
     clear_active_session()
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def qapp() -> QApplication:
     app = QApplication.instance() or QApplication([])
     return app  # type: ignore[return-value]
@@ -267,3 +281,50 @@ def test_gate_unlock_returns_context(
     from services.startup_security import get_active_session
 
     assert get_active_session() is context
+
+
+def test_dialog_waits_for_native_worker_return_before_accepting(qapp, service):
+    import threading
+
+    can_return = threading.Event()
+    released = threading.Event()
+    emitted = threading.Event()
+    worker_threads = []
+    context = object()
+    gui_thread = threading.get_ident()
+    service.configure_first_run("password", "senha de teste").close()
+
+    def work():
+        worker_threads.append(threading.get_ident())
+        can_return.wait(5)
+        return context
+
+    def hold_native_return(outcome):
+        assert outcome is context
+        assert threading.get_ident() != gui_thread
+        emitted.set()
+        released.wait(15)
+
+    dialog = StartupSecurityDialog(service, state="unlock")
+    dialog.show()
+    dialog._run_worker(work)
+    # Hold the real worker inside result emission, before it can quit its
+    # native thread. The UI still receives AsyncTask's queued result relay.
+    dialog._worker_task._worker.result.connect(
+        hold_native_return, type=Qt.DirectConnection,
+    )
+    can_return.set()
+    try:
+        assert _process_until(qapp, emitted.is_set)
+        qapp.processEvents()
+        assert worker_threads and worker_threads[0] != gui_thread
+        assert dialog.isVisible()
+        assert dialog.session_context is None
+        assert dialog._worker_task.is_running()
+        released.set()
+        assert _process_until(qapp, lambda: dialog.session_context is context)
+        assert dialog._worker_task is None
+        assert not dialog.isVisible()
+    finally:
+        can_return.set()
+        released.set()

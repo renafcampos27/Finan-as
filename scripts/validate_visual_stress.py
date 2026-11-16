@@ -21,6 +21,10 @@ def _arguments() -> argparse.Namespace:
         type=Path,
         default=PROJECT_ROOT / "artifacts" / "visual_stress",
     )
+    parser.add_argument(
+        "--native-scale-factor", type=float, default=None,
+        help="Measured unmodified screen DPR; normalize captures to exact target DPRs.",
+    )
     return parser.parse_args()
 
 
@@ -35,6 +39,10 @@ def main() -> int:
     validator = PROJECT_ROOT / "scripts" / "validate_visual_rendering.py"
     for scale in (1.0, 1.25, 1.5, 2.0):
         scale_dir = output_dir / f"scale_{scale:g}"
+        native_scale_arguments = (
+            ["--native-scale-factor", str(args.native_scale_factor)]
+            if args.native_scale_factor is not None else []
+        )
         completed = subprocess.run(
             [
                 sys.executable,
@@ -44,6 +52,7 @@ def main() -> int:
                 f"{scale:g}",
                 "--output-dir",
                 str(scale_dir),
+                *native_scale_arguments,
             ],
             cwd=PROJECT_ROOT,
             check=False,
